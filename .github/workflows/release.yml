@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (static musl — no libc dependency)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: wielo-x86_64-unknown-linux-musl
+
+          # Linux aarch64 (static musl)
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: wielo-aarch64-unknown-linux-musl
+
+          # macOS Intel
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: wielo-x86_64-apple-darwin
+
+          # macOS Apple Silicon
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: wielo-aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # musl cross-compilation toolchain for Linux ARM64
+      - name: Install cross (Linux musl targets)
+        if: runner.os == 'Linux'
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build (Linux via cross)
+        if: runner.os == 'Linux'
+        working-directory: terminal-app
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (macOS native)
+        if: runner.os == 'macOS'
+        working-directory: terminal-app
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename artifact
+        shell: bash
+        run: |
+          cp terminal-app/target/${{ matrix.target }}/release/wielo \
+             ${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
