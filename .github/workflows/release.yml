@@ -51,18 +51,16 @@ jobs:
 
       - name: Build (Linux via cross)
         if: runner.os == 'Linux'
-        working-directory: terminal-app
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Build (macOS native)
         if: runner.os == 'macOS'
-        working-directory: terminal-app
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename artifact
         shell: bash
         run: |
-          cp terminal-app/target/${{ matrix.target }}/release/wielo \
+          cp target/${{ matrix.target }}/release/wielo \
              ${{ matrix.artifact }}
 
       - name: Upload artifact
